@@ -168,6 +168,9 @@
 
   <div class="grid kpis" id="kpis"></div>
 
+  <h2 style="margin:18px 0 10px">Mercati seguiti</h2>
+  <div class="grid kpis" id="mercati-box"></div>
+
   <div class="cols">
     <div>
       <div class="card" style="margin-bottom:14px">
@@ -310,16 +313,31 @@ function renderKpis(s) {
     </div>`;
 }
 
+/* Un riquadro per ogni strumento seguito: prezzo, spread e quante
+   posizioni ci sono sopra in questo momento. */
+function renderMercati(list) {
+  const box = document.getElementById('mercati-box');
+  if (!box) return;
+  if (!list || !list.length) { box.innerHTML = ''; return; }
+  box.innerHTML = list.map(m => `
+    <div class="card kpi">
+      <div class="label">${m.symbol}</div>
+      <div class="value" style="font-size:17px">${fmt(m.price, 2)}</div>
+      <div class="sub">spread ${m.spread} pt${m.posizioni ? ' · ' + m.posizioni + ' aperte' : ''}</div>
+    </div>`).join('');
+}
+
 function renderPositions(list) {
   if (!list || !list.length) {
     $('pos-box').innerHTML = '<div class="empty">nessuna posizione aperta</div>';
     return;
   }
   $('pos-box').innerHTML = `<table>
-    <thead><tr><th>Strategia</th><th>Lato</th><th>Vol.</th><th>Apertura</th>
+    <thead><tr><th>Strategia</th><th>Strumento</th><th>Lato</th><th>Vol.</th><th>Apertura</th>
     <th>Attuale</th><th>SL</th><th>TP</th><th>P&amp;L</th></tr></thead><tbody>
     ${list.map(p => `<tr>
       <td data-label="Strategia"><span class="pill strat">${p.strategy}</span></td>
+      <td data-label="Strumento"><b>${p.symbol || ''}</b></td>
       <td data-label="Lato"><span class="pill ${p.side.toLowerCase()}">${p.side}</span></td>
       <td data-label="Volume">${p.volume}</td>
       <td data-label="Apertura">${fmt(p.open_price, 3)}</td>
@@ -493,6 +511,7 @@ async function refresh() {
       : `spread ${s.spread ?? '—'} pt · agg. ${(s.last_update || '').slice(11) || '—'}`;
 
     renderKpis(s);
+    renderMercati(s.mercati);
     renderPositions(s.positions);
     renderHistory(tr);
     renderStrategies(st);
