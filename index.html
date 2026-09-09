@@ -1,0 +1,533 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0b0f16">
+<link rel="manifest" href="manifest.webmanifest">
+<title>Trading Engine — Dashboard</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  :root{
+    --bg:#0b0f16; --panel:#131a24; --panel2:#182130; --line:#243044;
+    --txt:#e6edf7; --dim:#8496ad; --accent:#4f8cff;
+    --up:#26d07c; --down:#ff5470; --warn:#ffb020;
+    --mono:ui-monospace,"SF Mono",Menlo,Consolas,"Cascadia Mono",monospace;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0;background:var(--bg);color:var(--txt);
+    font:14px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  }
+  a{color:var(--accent)}
+  .wrap{max-width:1400px;margin:0 auto;padding:20px}
+
+  header{
+    display:flex;align-items:center;gap:16px;flex-wrap:wrap;
+    padding:14px 18px;background:var(--panel);border:1px solid var(--line);
+    border-radius:12px;margin-bottom:16px;
+  }
+  header h1{font-size:16px;margin:0;font-weight:650;letter-spacing:.2px}
+  .badge{
+    font:600 11px/1 var(--mono);padding:6px 10px;border-radius:999px;
+    border:1px solid var(--line);background:var(--panel2);color:var(--dim);
+    text-transform:uppercase;letter-spacing:.6px;
+  }
+  .badge.ok{color:var(--up);border-color:rgba(38,208,124,.35);background:rgba(38,208,124,.10)}
+  .badge.err{color:var(--down);border-color:rgba(255,84,112,.35);background:rgba(255,84,112,.10)}
+  .badge.warn{color:var(--warn);border-color:rgba(255,176,32,.35);background:rgba(255,176,32,.10)}
+  .spacer{flex:1}
+  .price{font:700 20px/1 var(--mono)}
+  .price small{font:500 11px/1 var(--mono);color:var(--dim);display:block;margin-top:5px}
+
+  .grid{display:grid;gap:14px;margin-bottom:16px}
+  .kpis{grid-template-columns:repeat(auto-fit,minmax(165px,1fr))}
+  .card{
+    background:var(--panel);border:1px solid var(--line);
+    border-radius:12px;padding:14px 16px;
+  }
+  .kpi .label{
+    font:600 10px/1 var(--mono);color:var(--dim);
+    text-transform:uppercase;letter-spacing:.8px;margin-bottom:8px;
+  }
+  .kpi .value{font:700 22px/1.1 var(--mono);letter-spacing:-.4px}
+  .kpi .sub{font:500 11px/1 var(--mono);color:var(--dim);margin-top:7px}
+  .up{color:var(--up)} .down{color:var(--down)} .warn{color:var(--warn)} .dim{color:var(--dim)}
+
+  .cols{display:grid;grid-template-columns:2fr 1fr;gap:14px}
+  @media(max-width:1000px){.cols{grid-template-columns:1fr}}
+
+  h2{
+    font:600 11px/1 var(--mono);color:var(--dim);text-transform:uppercase;
+    letter-spacing:.9px;margin:0 0 12px;
+  }
+  .chart-box{position:relative;height:290px}
+  .chart-box.small{height:210px}
+
+  table{width:100%;border-collapse:collapse;font:12px/1.5 var(--mono)}
+  th{
+    text-align:left;font-weight:600;color:var(--dim);font-size:10px;
+    text-transform:uppercase;letter-spacing:.6px;
+    padding:7px 8px;border-bottom:1px solid var(--line);white-space:nowrap;
+  }
+  td{padding:7px 8px;border-bottom:1px solid rgba(36,48,68,.5);white-space:nowrap}
+  tr:last-child td{border-bottom:none}
+  .tbl-scroll{overflow-x:auto;max-height:330px;overflow-y:auto}
+  .pill{
+    display:inline-block;padding:2px 7px;border-radius:5px;
+    font:600 10px/1.5 var(--mono);letter-spacing:.4px;
+  }
+  .pill.buy{background:rgba(38,208,124,.14);color:var(--up)}
+  .pill.sell{background:rgba(255,84,112,.14);color:var(--down)}
+  .pill.strat{background:rgba(79,140,255,.14);color:var(--accent)}
+
+  .log{
+    font:11px/1.7 var(--mono);color:var(--dim);
+    max-height:250px;overflow-y:auto;white-space:pre-wrap;word-break:break-word;
+  }
+  .log div{padding:1px 0;border-bottom:1px solid rgba(36,48,68,.35)}
+
+  .bar{height:6px;background:var(--panel2);border-radius:4px;overflow:hidden;margin-top:9px}
+  .bar i{display:block;height:100%;border-radius:4px;transition:width .4s}
+
+  .empty{color:var(--dim);font:12px var(--mono);padding:18px 4px;text-align:center}
+  .cfg{font:11px/1.9 var(--mono);color:var(--dim)}
+  .cfg b{color:var(--txt);font-weight:600}
+  footer{color:var(--dim);font:11px var(--mono);text-align:center;padding:18px 0}
+
+  /* ---------- navigazione ---------- */
+  .topnav{display:flex;gap:8px;margin-bottom:14px;padding:env(safe-area-inset-top) 0 0}
+  .topnav a{
+    flex:1;text-align:center;padding:11px 8px;border-radius:10px;
+    background:var(--panel);border:1px solid var(--line);
+    color:var(--dim);text-decoration:none;font-weight:600;font-size:14px;
+  }
+  .topnav a.on{background:var(--accent);border-color:var(--accent);color:#fff}
+
+  /* ---------- telefono ----------
+     Sotto i 700px le tabelle a otto colonne diventano illeggibili:
+     ogni riga viene trasformata in una scheda con le etichette a sinistra,
+     usando i data-label impostati dal JavaScript. */
+  @media(max-width:700px){
+    body{font-size:15px}
+    .wrap{padding:12px 12px 40px}
+    header{padding:12px 14px;gap:10px}
+    header h1{font-size:15px;width:100%}
+    .price{width:100%;display:flex;align-items:baseline;gap:10px}
+    .price small{margin-top:0}
+    .kpis{grid-template-columns:repeat(2,1fr);gap:10px}
+    .kpi .value{font-size:19px}
+    .cols{grid-template-columns:1fr}
+    .chart-box{height:230px}
+    .chart-box.small{height:190px}
+    .tbl-scroll{max-height:none;overflow:visible}
+
+    table thead{display:none}
+    table,table tbody,table tr,table td{display:block;width:100%}
+    table tr{
+      background:var(--panel2);border:1px solid var(--line);
+      border-radius:10px;padding:10px 12px;margin-bottom:9px;
+    }
+    table td{
+      border:none;padding:4px 0;white-space:normal;
+      display:flex;justify-content:space-between;align-items:center;gap:12px;
+    }
+    table td::before{
+      content:attr(data-label);color:var(--dim);
+      font:600 10px var(--mono);text-transform:uppercase;letter-spacing:.6px;
+    }
+    table td:first-child{border-bottom:1px solid var(--line);padding-bottom:8px;
+      margin-bottom:6px}
+    .log{max-height:200px}
+  }
+  @media(max-width:380px){
+    .kpis{grid-template-columns:1fr}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <nav class="topnav">
+    <a href="/" class="on">Trading</a>
+    <a href="/notizie">Rassegna</a>
+  </nav>
+
+  <header>
+    <h1>Trading Engine</h1>
+    <span class="badge" id="b-conn">connessione…</span>
+    <span class="badge" id="b-sym">—</span>
+    <span class="badge" id="b-mode">—</span>
+    <span class="badge" id="b-halt" style="display:none"></span>
+    <div class="spacer"></div>
+    <div class="price">
+      <span id="px">—</span>
+      <small id="px-sub">spread — · agg. —</small>
+    </div>
+  </header>
+
+  <div class="grid kpis" id="kpis"></div>
+
+  <div class="cols">
+    <div>
+      <div class="card" style="margin-bottom:14px">
+        <h2>Curva di equity</h2>
+        <div class="chart-box"><canvas id="eqChart"></canvas></div>
+      </div>
+      <div class="card" style="margin-bottom:14px">
+        <h2>Posizioni aperte</h2>
+        <div class="tbl-scroll" id="pos-box"></div>
+      </div>
+      <div class="card">
+        <h2>Storico operazioni</h2>
+        <div class="tbl-scroll" id="hist-box"></div>
+      </div>
+    </div>
+
+    <div>
+      <div class="card" style="margin-bottom:14px">
+        <h2>Risultato per operazione</h2>
+        <div class="chart-box small"><canvas id="pnlChart"></canvas></div>
+      </div>
+      <div class="card" style="margin-bottom:14px">
+        <h2>Rendimento per strategia</h2>
+        <div id="strat-box"></div>
+      </div>
+      <div class="card" style="margin-bottom:14px">
+        <h2>Configurazione attiva</h2>
+        <div class="cfg" id="cfg-box"></div>
+      </div>
+      <div class="card">
+        <h2>Attività del motore</h2>
+        <div class="log" id="log-box"></div>
+      </div>
+    </div>
+  </div>
+
+  <footer>Dashboard locale · aggiornamento automatico ogni 2 secondi</footer>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+let CUR = '';            // valuta del conto
+let eqChart, pnlChart;
+
+const fmt = (n, d = 2) =>
+  (n === null || n === undefined || isNaN(n)) ? '—'
+  : Number(n).toLocaleString('it-IT', {minimumFractionDigits: d, maximumFractionDigits: d});
+const sign = n => (n > 0 ? 'up' : n < 0 ? 'down' : 'dim');
+const signed = (n, d = 2) => (n > 0 ? '+' : '') + fmt(n, d);
+
+/* ---------- grafici ---------- */
+const gridColor = 'rgba(36,48,68,.55)';
+const baseScale = {
+  grid: {color: gridColor, drawBorder: false},
+  ticks: {color: '#8496ad', font: {family: 'ui-monospace, monospace', size: 10}}
+};
+
+function initCharts() {
+  Chart.defaults.font.family = 'ui-monospace, Menlo, Consolas, monospace';
+  Chart.defaults.color = '#8496ad';
+
+  eqChart = new Chart($('eqChart'), {
+    type: 'line',
+    data: {labels: [], datasets: [
+      {label: 'Equity', data: [], borderColor: '#4f8cff', backgroundColor: 'rgba(79,140,255,.12)',
+       borderWidth: 2, fill: true, tension: .25, pointRadius: 0},
+      {label: 'Saldo', data: [], borderColor: '#8496ad', borderWidth: 1.5,
+       borderDash: [5, 4], fill: false, tension: .25, pointRadius: 0}
+    ]},
+    options: {
+      responsive: true, maintainAspectRatio: false, animation: false,
+      interaction: {intersect: false, mode: 'index'},
+      plugins: {legend: {labels: {boxWidth: 10, font: {size: 11}}}},
+      scales: {x: {...baseScale, ticks: {...baseScale.ticks, maxTicksLimit: 8}}, y: baseScale}
+    }
+  });
+
+  pnlChart = new Chart($('pnlChart'), {
+    type: 'bar',
+    data: {labels: [], datasets: [{label: 'P&L', data: [], borderWidth: 0}]},
+    options: {
+      responsive: true, maintainAspectRatio: false, animation: false,
+      plugins: {legend: {display: false}},
+      scales: {x: {...baseScale, ticks: {...baseScale.ticks, maxTicksLimit: 10}}, y: baseScale}
+    }
+  });
+}
+
+/* ---------- rendering ---------- */
+function renderKpis(s) {
+  const a = s.account || {}, r = s.risk || {};
+  const pnl = a.total_pnl ?? 0, pnlPct = a.total_pnl_pct ?? 0;
+  const dd = r.drawdown_pct ?? 0, maxDd = (s.config || {}).max_drawdown_pct ?? 100;
+  const ddRatio = Math.min(100, maxDd > 0 ? dd / maxDd * 100 : 0);
+  const st = window.__stats || {};
+  const wr = st.win_rate ?? 0;
+
+  $('kpis').innerHTML = `
+    <div class="card kpi">
+      <div class="label">Capitale iniziale</div>
+      <div class="value">${fmt(a.initial_balance)}</div>
+      <div class="sub">${CUR} · leva 1:${a.leverage ?? '—'}</div>
+    </div>
+    <div class="card kpi">
+      <div class="label">Saldo attuale</div>
+      <div class="value">${fmt(a.balance)}</div>
+      <div class="sub">chiuso e realizzato</div>
+    </div>
+    <div class="card kpi">
+      <div class="label">Equity</div>
+      <div class="value ${sign(pnl)}">${fmt(a.equity)}</div>
+      <div class="sub">flottante ${signed(a.floating_pnl)}</div>
+    </div>
+    <div class="card kpi">
+      <div class="label">P&amp;L complessivo</div>
+      <div class="value ${sign(pnl)}">${signed(pnl)}</div>
+      <div class="sub ${sign(pnl)}">${signed(pnlPct)} %</div>
+    </div>
+    <div class="card kpi">
+      <div class="label">Margine</div>
+      <div class="value">${fmt(a.margin)}</div>
+      <div class="sub">libero ${fmt(a.margin_free)}</div>
+    </div>
+    <div class="card kpi">
+      <div class="label">Operazioni vinte</div>
+      <div class="value ${wr >= 50 ? 'up' : wr > 0 ? 'down' : 'dim'}">${fmt(wr, 1)}%</div>
+      <div class="sub">${st.wins ?? 0} vinte / ${st.losses ?? 0} perse</div>
+    </div>
+    <div class="card kpi">
+      <div class="label">Profit factor</div>
+      <div class="value ${(st.profit_factor ?? 0) >= 1 ? 'up' : 'down'}">${st.profit_factor ?? '—'}</div>
+      <div class="sub">medie ${signed(st.avg_win ?? 0)} / ${signed(st.avg_loss ?? 0)}</div>
+    </div>
+    <div class="card kpi">
+      <div class="label">Drawdown</div>
+      <div class="value ${dd > maxDd * .7 ? 'down' : dd > maxDd * .4 ? 'warn' : 'dim'}">${fmt(dd, 1)}%</div>
+      <div class="sub">limite ${fmt(maxDd, 0)}%</div>
+      <div class="bar"><i style="width:${ddRatio}%;background:${
+        dd > maxDd * .7 ? 'var(--down)' : dd > maxDd * .4 ? 'var(--warn)' : 'var(--accent)'}"></i></div>
+    </div>`;
+}
+
+function renderPositions(list) {
+  if (!list || !list.length) {
+    $('pos-box').innerHTML = '<div class="empty">nessuna posizione aperta</div>';
+    return;
+  }
+  $('pos-box').innerHTML = `<table>
+    <thead><tr><th>Strategia</th><th>Lato</th><th>Vol.</th><th>Apertura</th>
+    <th>Attuale</th><th>SL</th><th>TP</th><th>P&amp;L</th></tr></thead><tbody>
+    ${list.map(p => `<tr>
+      <td data-label="Strategia"><span class="pill strat">${p.strategy}</span></td>
+      <td data-label="Lato"><span class="pill ${p.side.toLowerCase()}">${p.side}</span></td>
+      <td data-label="Volume">${p.volume}</td>
+      <td data-label="Apertura">${fmt(p.open_price, 3)}</td>
+      <td data-label="Attuale">${fmt(p.current, 3)}</td>
+      <td data-label="Stop loss" class="dim">${p.sl ? fmt(p.sl, 3) : '—'}</td>
+      <td data-label="Take profit" class="dim">${p.tp ? fmt(p.tp, 3) : '—'}</td>
+      <td data-label="Risultato" class="${sign(p.profit)}">${signed(p.profit)}</td>
+    </tr>`).join('')}</tbody></table>`;
+}
+
+function renderHistory(rows) {
+  const closed = (rows || []).filter(t => t.status === 'closed');
+  if (!closed.length) {
+    $('hist-box').innerHTML = '<div class="empty">nessuna operazione chiusa</div>';
+  } else {
+    $('hist-box').innerHTML = `<table>
+      <thead><tr><th>Chiusura</th><th>Strategia</th><th>Lato</th><th>Vol.</th>
+      <th>Ingresso</th><th>Uscita</th><th>Risultato</th><th>Causa</th></tr></thead><tbody>
+      ${closed.map(t => `<tr>
+        <td data-label="Chiusura" class="dim">${(t.closed_at || '').replace('T', ' ').slice(5)}</td>
+        <td data-label="Strategia"><span class="pill strat">${t.strategy}</span></td>
+        <td data-label="Lato"><span class="pill ${(t.side || '').toLowerCase()}">${t.side}</span></td>
+        <td data-label="Volume">${t.volume}</td>
+        <td data-label="Ingresso">${fmt(t.open_price, 3)}</td>
+        <td data-label="Uscita">${fmt(t.close_price, 3)}</td>
+        <td data-label="Risultato" class="${sign(t.profit)}">${signed(t.profit)}</td>
+        <td data-label="Causa" class="dim">${t.close_reason || ''}</td>
+      </tr>`).join('')}</tbody></table>`;
+  }
+
+  // Grafico a barre: risultato delle ultime operazioni, in ordine cronologico
+  const seq = closed.slice().reverse().slice(-30);
+  pnlChart.data.labels = seq.map(t => '#' + (t.ticket || t.id));
+  pnlChart.data.datasets[0].data = seq.map(t => t.profit);
+  pnlChart.data.datasets[0].backgroundColor =
+    seq.map(t => t.profit > 0 ? 'rgba(38,208,124,.75)' : 'rgba(255,84,112,.75)');
+  pnlChart.update('none');
+}
+
+function renderStrategies(st) {
+  const per = (st && st.per_strategy) || {};
+  const names = Object.keys(per);
+  if (!names.length) {
+    $('strat-box').innerHTML = '<div class="empty">nessun dato disponibile</div>';
+    return;
+  }
+  const max = Math.max(...names.map(n => Math.abs(per[n].profit)), 1);
+  $('strat-box').innerHTML = names.map(n => {
+    const s = per[n];
+    return `<div style="margin-bottom:13px">
+      <div style="display:flex;justify-content:space-between;font:12px var(--mono);margin-bottom:3px">
+        <span><span class="pill strat">${n}</span></span>
+        <span class="${sign(s.profit)}">${signed(s.profit)} ${CUR}</span>
+      </div>
+      <div style="font:10px var(--mono);color:var(--dim)">
+        ${s.trades} operazioni · ${fmt(s.win_rate, 1)}% vinte
+      </div>
+      <div class="bar"><i style="width:${Math.abs(s.profit) / max * 100}%;background:${
+        s.profit >= 0 ? 'var(--up)' : 'var(--down)'}"></i></div>
+    </div>`;
+  }).join('');
+}
+
+function renderConfig(c, s) {
+  if (!c) return;
+  $('cfg-box').innerHTML = `
+    Simbolo <b>${s.symbol || c.symbol}</b><br>
+    Strategie <b>${(c.strategies || []).join(', ')}</b><br>
+    Rischio per operazione <b>${c.risk_per_trade_pct}%</b><br>
+    Posizioni massime <b>${c.max_open_positions}</b><br>
+    Stop su drawdown <b>${c.max_drawdown_pct >= 100 ? 'disattivato' : c.max_drawdown_pct + '%'}</b><br>
+    Perdita giornaliera max <b>${c.max_daily_loss_pct}%</b><br>
+    Modalita' <b>${s.trading_mode || 'auto'}</b><br>
+    Orario operativo <b>${c.trading_hours || '24 ore'}</b><br>
+    Conto <b>${s.login || '—'}</b> · ${s.server || '—'}`;
+}
+
+/* ---------- da dove arrivano i dati ----------
+   La stessa pagina gira in due posti diversi:
+     - sul PC, servita dal motore, dove esiste l'API in tempo reale;
+     - su GitHub Pages, dove non esiste nessun server e c'e' solo un file
+       JSON che il motore ricarica ogni minuto.
+   Si prova l'API una volta sola: se non risponde si passa al file e non si
+   riprova piu', per non sprecare una richiesta a vuoto ogni due secondi. */
+const RAMO_DATI = 'dati';          /* lo riscrive deploy_github.py se lo cambi */
+let FONTE = null;                  /* 'api' | 'file' */
+let GENERATO = null;               /* orario dell'ultima fotografia, in modalita' file */
+
+function urlDatiStatici() {
+  const m = location.hostname.match(/^([^.]+)\.github\.io$/);
+  if (m) {
+    const repo = location.pathname.split('/').filter(Boolean)[0] || location.hostname;
+    return `https://raw.githubusercontent.com/${m[1]}/${repo}/${RAMO_DATI}/dati.json`;
+  }
+  return 'dati.json';              /* dominio personalizzato o cartella locale */
+}
+
+async function caricaDati() {
+  if (FONTE !== 'file') {
+    try {
+      const [state, stats, equity, trades] = await Promise.all([
+        fetch('/api/state').then(r => r.json()),
+        fetch('/api/stats').then(r => r.json()),
+        fetch('/api/equity?limit=1500').then(r => r.json()),
+        fetch('/api/trades?limit=80').then(r => r.json())
+      ]);
+      FONTE = 'api'; GENERATO = null;
+      return { state, stats, equity, trades };
+    } catch (e) {
+      FONTE = 'file';
+    }
+  }
+  const d = await fetch(urlDatiStatici() + '?t=' + Date.now(),
+                        { cache: 'no-store' }).then(r => r.json());
+  GENERATO = d.generato || null;
+  return d;
+}
+
+/* Quanti minuti sono passati dall'ultima fotografia pubblicata. */
+function minutiDaGenerato() {
+  if (!GENERATO) return 0;
+  return Math.max(0, (Date.now() - new Date(GENERATO).getTime()) / 60000);
+}
+
+/* ---------- polling ---------- */
+async function refresh() {
+  try {
+    const d = await caricaDati();
+    const s = d.state || {}, st = d.stats || {}, eq = d.equity || [], tr = d.trades || [];
+    window.__stats = st;
+    CUR = (s.account && s.account.currency) || s.currency || '';
+
+    // Barra di stato. Sul sito pubblico i dati sono una fotografia: se
+    // il motore si ferma la pagina resta in piedi, ma va detto chiaramente
+    // che i numeri non si stanno piu' aggiornando.
+    const conn = $('b-conn');
+    const fermi = FONTE === 'file' && minutiDaGenerato() > 5;
+    if (fermi) {
+      conn.textContent = 'dati fermi da ' + Math.round(minutiDaGenerato()) + ' min';
+      conn.className = 'badge err';
+    }
+    else if (!s.connected) { conn.textContent = 'disconnesso'; conn.className = 'badge err'; }
+    else if (!s.running) { conn.textContent = 'fermo'; conn.className = 'badge warn'; }
+    else { conn.textContent = 'operativo'; conn.className = 'badge ok'; }
+
+    $('b-sym').textContent = s.symbol || '—';
+    if (s.config && s.config.dry_run) {
+      $('b-mode').textContent = 'solo segnali';
+      $('b-mode').className = 'badge warn';
+    } else if (s.trading_mode === 'manuale') {
+      $('b-mode').textContent = 'manuale · chiede conferma';
+      $('b-mode').className = 'badge warn';
+    } else {
+      $('b-mode').textContent = 'automatico';
+      $('b-mode').className = 'badge ok';
+    }
+
+    const halt = $('b-halt');
+    const r = s.risk || {};
+    if (r.halted || r.daily_halt) {
+      halt.style.display = '';
+      halt.className = 'badge err';
+      halt.textContent = r.halted ? ('STOP · ' + r.halt_reason) : 'sospeso per oggi';
+    } else halt.style.display = 'none';
+
+    $('px').textContent = s.price ? fmt(s.price) : '—';
+    $('px-sub').textContent = FONTE === 'file'
+      ? `spread ${s.spread ?? '—'} pt · fotografia delle ${(GENERATO || '').slice(11) || '—'}`
+      : `spread ${s.spread ?? '—'} pt · agg. ${(s.last_update || '').slice(11) || '—'}`;
+
+    renderKpis(s);
+    renderPositions(s.positions);
+    renderHistory(tr);
+    renderStrategies(st);
+    renderConfig(s.config, s);
+
+    // Curva di equity
+    eqChart.data.labels = eq.map(p => p.ts.slice(11, 16));
+    eqChart.data.datasets[0].data = eq.map(p => p.equity);
+    eqChart.data.datasets[1].data = eq.map(p => p.balance);
+    eqChart.update('none');
+
+    const logs = s.log || [];
+    $('log-box').innerHTML = logs.length
+      ? logs.slice().reverse().map(l => `<div>${l.replace(/[<>&]/g, c =>
+          ({'<': '&lt;', '>': '&gt;', '&': '&amp;'}[c]))}</div>`).join('')
+      : '<div class="empty">in attesa di attività</div>';
+
+  } catch (e) {
+    const conn = $('b-conn');
+    conn.textContent = FONTE === 'file'
+      ? 'dati non raggiungibili' : 'server non raggiungibile';
+    conn.className = 'badge err';
+  }
+}
+
+initCharts();
+refresh();
+let timer = setInterval(refresh, 2000);
+/* Con l'API locale ha senso ogni 2 secondi. Sul sito pubblicato no: la
+   fotografia cambia al massimo una volta al minuto, e ricaricarla di
+   continuo sarebbe solo traffico sprecato. */
+setTimeout(() => {
+  if (FONTE === 'file') {
+    clearInterval(timer);
+    timer = setInterval(refresh, 30000);
+  }
+}, 5000);
+</script>
+</body>
+</html>
