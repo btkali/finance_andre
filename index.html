@@ -456,7 +456,9 @@ async function refresh() {
     // il motore si ferma la pagina resta in piedi, ma va detto chiaramente
     // che i numeri non si stanno piu' aggiornando.
     const conn = $('b-conn');
-    const fermi = FONTE === 'file' && minutiDaGenerato() > 5;
+    /* La CDN di GitHub serve copie fino a 5 minuti vecchie: sotto i 12
+       minuti non si puo' concludere che il motore sia fermo. */
+    const fermi = FONTE === 'file' && minutiDaGenerato() > 12;
     if (fermi) {
       conn.textContent = 'dati fermi da ' + Math.round(minutiDaGenerato()) + ' min';
       conn.className = 'badge err';
